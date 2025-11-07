@@ -1,9 +1,10 @@
 # =========================
-# HAT x2 from scratch (DF2K) + ESC(HAB) + CSA+Memory (OCAB 대체)
+# HATX x2 from scratch (DF2K) + ESC(HAB) + OCAB(ESC on)
+# PSNR-oriented config (no GAN/perc)
 # =========================
 
 # --- general settings ---
-name: train_HAT_SRx2_ESC_OCAB_from_scratch
+name: train_HATX_SRx2_ESC_OCAB_PSNR
 model_type: HATModel
 scale: 2
 num_gpu: auto
@@ -25,7 +26,7 @@ datasets:
 
     use_shuffle: true
     num_worker_per_gpu: 6
-    batch_size_per_gpu: 4
+    batch_size_per_gpu: 2
     dataset_enlarge_ratio: 1
     prefetch_mode: ~
 
@@ -43,41 +44,41 @@ datasets:
     dataroot_lq: ./datasets/Set14/LRbicx2
     io_backend: { type: disk }
 
-# --- network (HATX: Dual-Branch) ---
+# --- network (HATX: PSNR-tuned) ---
 network_g:
   type: HATX
   upscale: 2
   in_chans: 3
   img_size: 64
-  window_size: 16
+  window_size: 16          # 메모리 여유되면 16 유지, 부족하면 8/12로 조절
   compress_ratio: 3
   squeeze_factor: 30
-  conv_scale: 0.01
-  overlap_ratio: 0.5
+  conv_scale: 0.03         # ↑ 0.01 -> 0.03 (권장 스윗스팟 0.02~0.03)
+  overlap_ratio: 0.6       # ↑ 0.5 -> 0.6 (경계 안정화)
   img_range: 1.0
 
   depths: [6, 6, 6, 6, 6, 6]
   embed_dim: 180
   num_heads: [6, 6, 6, 6, 6, 6]
-  mlp_ratio: 2
+
+  # 비고: HATX에서는 HAB FFN 비율(SGFN)과 OCAB MLP 비율을 분리
+  hab_ffn_ratio: 3.0       # HAB 전용 FFN (Spatial-Gate DConv FFN) 비율
+  mlp_ratio: 4.0           # OCAB MLP는 4.0 권장
   upsampler: pixelshuffle
   resi_connection: '1conv'
 
-  # --- Local branch: ESC (HAB) ---
-  esc_pdim: 16
-  esc_kernel: 13
+  # --- HAB (Local ESC) ---
+  esc_pdim: 24             # ↑ 16 -> 24
+  esc_kernel: 15           # ↑ 13 -> 15
 
-  # --- Global branch: Cross-Scale Attention + Memory ---
-  csa_heads: 6
-  csa_down_ratio: 2
-  csa_mem_size: 16
+  # --- OCAB (ESC 주입 활성) ---
+  ocab_esc_enable: true
+  ocab_esc_pdim: 32        # ↑ 16 -> 32
+  ocab_esc_kernel: 17      # ↑ 13 -> 17
 
-  # --- FFT-gated ---
-  fft_bands: 3
-  fft_res_scale: 0.15
-
-  # --- Iterative refinement ---
-  iterative_T: 1
+  # --- 집중 어텐션 옵션 ---
+  kv_topk_ratio: 0.6       # < 1.0이면 Top-K 프루닝 활성 (0.5~0.8 권장)
+  use_focus_bias: true     # Focus bias 헤드 활성 (로짓 가산)
 
 # --- paths ---
 path:
@@ -87,7 +88,7 @@ path:
 
 # --- training ---
 train:
-  ema_decay: 0.999
+  ema_decay: 0.9995        # ↑ 0.999 -> 0.9995 (EMA로 검증/저장 안정화)
 
   optim_g:
     type: Adam
@@ -103,7 +104,7 @@ train:
   total_iter: 500000
   warmup_iter: -1  # no warmup
 
-  # losses
+  # losses (PSNR 지향)
   pixel_opt:
     type: L1Loss
     loss_weight: 1.0
@@ -112,7 +113,7 @@ train:
 # --- validation ---
 val:
   val_freq: !!float 5e3
-  save_img: false
+  save_img: true
   pbar: false
   tile: 64
   tile_pad: 16

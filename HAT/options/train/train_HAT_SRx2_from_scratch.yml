@@ -62,7 +62,14 @@ network_g:
   mlp_ratio: 2
   upsampler: pixelshuffle
   resi_connection: '1conv'
-
+  # --- ESC options (새로 추가) ---
+  esc_pdim: 16          # PLK가 도는 채널 수(작게 유지)
+  esc_kernel: 13        # 대형 커널 사이즈
+  esc_use_dynamic: true # 동적 3x3 비활성화로 학습 시간 절감
+  # === OCAB에 ESC 주입을 켜려면 ===
+  ocab_esc_enable: True
+  ocab_esc_pdim: 16    # 16/24/32 권장 (embed_dim=180일 때)
+  ocab_esc_kernel: 13
 # --- paths ---
 path:
   pretrain_network_g: ~
@@ -96,7 +103,7 @@ train:
 # --- validation ---
 val:
   val_freq: !!float 5e3
-  save_img: false
+  save_img: true
   pbar: false
   metrics:
     psnr:
